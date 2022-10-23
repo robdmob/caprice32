@@ -249,6 +249,16 @@ enum ApplicationWindowState
 
 CapriceArgs args;
 
+void writeROM(byte rom, byte *data, int length) {
+   byte *romData = memmap_ROM[rom];
+   if (romData == nullptr) {
+      romData = new byte [16384];
+      memset(romData, 0, 16384);
+      memmap_ROM[rom] = romData;     
+   }
+   memcpy(romData+0x2800, data, length);
+}
+
 void ga_init_banking (t_MemBankConfig& membank_config, unsigned char RAM_bank)
 {
    byte *romb0, *romb1, *romb2, *romb3, *romb4, *romb5, *romb6, *romb7;
