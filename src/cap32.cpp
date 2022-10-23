@@ -57,6 +57,8 @@
 
 #include "savepng.h"
 
+#include "external.h"
+
 #define MAX_LINE_LEN 256
 
 #define MAX_NB_JOYSTICKS 2
@@ -439,7 +441,8 @@ byte z80_IN_handler (reg_pair port)
       }
    }
 // ----------------------------------------------------------------------------
-   else if (!(port.b.h & 0x04)) { // external peripheral?
+   //else if (!(port.b.h & 0x04)) { // external peripheral?
+   else if (port.b.h >= 0xf8) { // external peripheral?
       if ((port.b.h == 0xfb) && (!(port.b.l & 0x80))) { // FDC?
          if (!(port.b.l & 0x01)) { // FDC status register?
             ret_val = fdc_read_status();
@@ -447,6 +450,7 @@ byte z80_IN_handler (reg_pair port)
             ret_val = fdc_read_data();
          }
       }
+      else ret_val = external_IN(port);
    }
    LOG_DEBUG("IN on port " << std::hex << static_cast<int>(port.w.l) << ", ret_val=" << static_cast<int>(ret_val) << std::dec);
    return ret_val;
@@ -806,28 +810,31 @@ void z80_OUT_handler (reg_pair port, byte val)
             break;
       }
    }
-// FDC ------------------------------------------------------------------------
-   if ((port.b.h == 0xfa) && (!(port.b.l & 0x80))) { // floppy motor control?
-      LOG_DEBUG("FDC motor control access: " << static_cast<int>(port.b.l) << " - " << static_cast<int>(val));
-      FDC.motor = val & 0x01;
-      #ifdef DEBUG_FDC
-      fputs(FDC.motor ? "\r\n--- motor on" : "\r\n--- motor off", pfoDebug);
-      #endif
-      FDC.flags |= STATUSDRVA_flag | STATUSDRVB_flag;
-   }
-   else if ((port.b.h == 0xfb) && (!(port.b.l & 0x80))) { // FDC data register?
-      fdc_write_data(val);
-   }
-// MF2 ------------------------------------------------------------------------
-   else if ((CPC.mf2) && (port.b.h == 0xfe)) { // Multiface 2?
-      if ((port.b.l == 0xe8) && (!(dwMF2Flags & MF2_INVISIBLE))) { // page in MF2 ROM?
-         dwMF2Flags |= MF2_ACTIVE;
-         ga_memory_manager();
+   if (port.b.h >= 0xf8) {
+   // FDC ------------------------------------------------------------------------
+      if ((port.b.h == 0xfa) && (!(port.b.l & 0x80))) { // floppy motor control?
+         LOG_DEBUG("FDC motor control access: " << static_cast<int>(port.b.l) << " - " << static_cast<int>(val));
+         FDC.motor = val & 0x01;
+         #ifdef DEBUG_FDC
+         fputs(FDC.motor ? "\r\n--- motor on" : "\r\n--- motor off", pfoDebug);
+         #endif
+         FDC.flags |= STATUSDRVA_flag | STATUSDRVB_flag;
       }
-      else if (port.b.l == 0xea) { // page out MF2 ROM?
-         dwMF2Flags &= ~MF2_ACTIVE;
-         ga_memory_manager();
+      else if ((port.b.h == 0xfb) && (!(port.b.l & 0x80))) { // FDC data register?
+         fdc_write_data(val);
       }
+   // MF2 ------------------------------------------------------------------------
+      else if ((CPC.mf2) && (port.b.h == 0xfe)) { // Multiface 2?
+         if ((port.b.l == 0xe8) && (!(dwMF2Flags & MF2_INVISIBLE))) { // page in MF2 ROM?
+            dwMF2Flags |= MF2_ACTIVE;
+            ga_memory_manager();
+         }
+         else if (port.b.l == 0xea) { // page out MF2 ROM?
+            dwMF2Flags &= ~MF2_ACTIVE;
+            ga_memory_manager();
+         }
+      }
+      else external_OUT(port, val);
    }
 }
 
