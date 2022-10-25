@@ -116,6 +116,7 @@ byte *pbExpansionROM = nullptr;
 byte *pbMF2ROMbackup = nullptr;
 byte *pbMF2ROM = nullptr;
 byte *pbTapeImage = nullptr;
+byte *pbM4ROM = nullptr;
 byte keyboard_matrix[16];
 
 std::list<SDL_Event> virtualKeyboardEvents;
@@ -249,14 +250,11 @@ enum ApplicationWindowState
 
 CapriceArgs args;
 
-void writeROM(byte rom, byte *data, int length) {
-   byte *romData = memmap_ROM[rom];
-   if (romData == nullptr) {
-      romData = new byte [16384];
-      memset(romData, 0, 16384);
-      memmap_ROM[rom] = romData;     
+void writeROM(byte *data, int length) {
+   if (pbM4ROM != nullptr) {
+      word romOffset = ((pbM4ROM[0x3F03] << 8) | pbM4ROM[0x3F02]) - 0xc000;
+      memcpy(pbM4ROM+romOffset+3, data, length);     
    }
-   memcpy(romData+0x2800, data, length);
 }
 
 void ga_init_banking (t_MemBankConfig& membank_config, unsigned char RAM_bank)
@@ -1137,6 +1135,7 @@ int emulator_init ()
    pbROMlo = pbROM;
    pbROMhi =
    pbExpansionROM = pbROM + 16384;
+   pbM4ROM = nullptr;
    memset(memmap_ROM, 0, sizeof(memmap_ROM[0]) * 256); // clear the expansion ROM map
    ga_init_banking(membank_config, GateArray.RAM_bank); // init the CPC memory banking map
    if ((iErr = emulator_patch_ROM())) {
@@ -1178,6 +1177,7 @@ int emulator_init ()
                  return ERR_NOT_A_CPC_ROM;
                }
                memmap_ROM[iRomNum] = pchRomData; // update the ROM map
+               if (rom_file == "m4rom.rom") pbM4ROM = pchRomData;
             } else { // not a valid ROM file
                fprintf(stderr, "ERROR: %s is not a CPC ROM file - clearing ROM slot %d.\n", rom_file.c_str(), iRomNum);
                delete [] pchRomData; // free memory on error
