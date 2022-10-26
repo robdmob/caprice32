@@ -250,10 +250,11 @@ enum ApplicationWindowState
 
 CapriceArgs args;
 
-void writeROM(byte *data, int length) {
+void writeROM(byte *data, int offset, int length) {
    if (pbM4ROM != nullptr) {
       word romOffset = ((pbM4ROM[0x3F03] << 8) | pbM4ROM[0x3F02]) - 0xc000;
-      memcpy(pbM4ROM+romOffset+3, data, length);     
+      if ((length + offset) > 2048) length = 2048 - offset;
+      memcpy(pbM4ROM+romOffset+offset, data, length);     
    }
 }
 

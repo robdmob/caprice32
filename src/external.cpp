@@ -21,13 +21,13 @@ struct memory {
  static size_t cb(void *data, size_t size, size_t nmemb, void *userp)
  {
    size_t realsize = size * nmemb;
-   struct memory *mem = static_cast<memory*>(userp);
+   struct memory *mem = static_cast<struct memory*>(userp);
  
-   void *ptr = realloc(mem->response, mem->size + realsize + 1);
+   byte *ptr = static_cast<byte*>(realloc(mem->response, mem->size + realsize + 1));
    if(ptr == NULL)
      return 0;  /* out of memory! */
  
-   mem->response = static_cast<byte*>(ptr);
+   mem->response = (ptr);
    memcpy(&(mem->response[mem->size]), data, realsize);
    mem->size += realsize;
    mem->response[mem->size] = 0;
@@ -38,31 +38,36 @@ struct memory {
 void doM4() {
     if ((counter >= 3) & (command[0] == (counter-1)) & (command[2] == 0x43)) {
         command[counter] = 0;
+        writeROM(command, 0, 3);
         switch (command[1]) {
             case 0x28: // C_HTTPGETMEM
                 CURL *curl;
-                CURLcode res;
+                if (responseBuffer.size > 0) free(responseBuffer.response);
+                responseBuffer = {nullptr, 0};
                 curl = curl_easy_init();
                 curl_easy_setopt(curl, CURLOPT_URL, &command[5]);
                 curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (command[4] << 8) | command[3]);
+                curl_easy_setopt(curl, CURLOPT_USERAGENT, "m4");
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cb);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-                res = curl_easy_perform(curl);
+                curl_easy_perform(curl);
                 curl_easy_cleanup(curl);
                 byte response[2];
-                response[0] = responseBuffer.size;
-                response[1] = static_cast<word>(responseBuffer.size) >> 8;
-                writeROM(response, 2);
+                response[0] = responseBuffer.size & 0xff;
+                response[1] = (responseBuffer.size >> 8) & 0xff;
+                writeROM(response, 3, 2);
                 break;
             case 0x29: // C_COPYBUF
-                writeROM(responseBuffer.response, responseBuffer.size);
+                word offset;
+                offset = (command[4] << 8) | command[3];
+                writeROM(responseBuffer.response+offset, 3, responseBuffer.size-offset);
                 break;
             case 0x24: // C_TIME
                 byte timeData[20];
                 time(&rawtime);
                 timeinfo = localtime(&rawtime);
                 strftime(reinterpret_cast<char*>(timeData), 20, "%H:%M:%S %Y-%m-%d", timeinfo);
-                writeROM(timeData, 20);
+                writeROM(timeData, 3, 20);
                 break;
         }
     }

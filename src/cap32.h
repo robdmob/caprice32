@@ -452,6 +452,6 @@ void InitAY();
 double *video_get_green_palette(int mode);
 double *video_get_rgb_color(int color);
 
-void writeROM(byte *data, int length);
+void writeROM(byte *data, int offset, int length);
 void showGui();
 #endif
