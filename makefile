@@ -55,8 +55,8 @@ else
 prefix = /usr/local
 TARGET = cap32
 TEST_TARGET = test_runner
-IPATHS = -Isrc/ -Isrc/gui/includes `pkg-config --cflags freetype2` `sdl2-config --cflags` `pkg-config --cflags libpng`
-LIBS = `sdl2-config --libs` -lz `pkg-config --libs freetype2` `pkg-config --libs libpng`
+IPATHS = -Isrc/ -Isrc/gui/includes `pkg-config --cflags libcurl` `pkg-config --cflags freetype2` `sdl2-config --cflags` `pkg-config --cflags libpng`
+LIBS = `sdl2-config --libs` -lz `pkg-config --libs libcurl` `pkg-config --libs freetype2` `pkg-config --libs libpng`
 CXX ?= g++
 COMMON_CFLAGS = -fPIC
 ifdef WITH_IPF
