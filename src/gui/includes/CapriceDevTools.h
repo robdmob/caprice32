@@ -7,14 +7,16 @@
 #include "cap32.h"
 #include "symfile.h"
 #include "types.h"
+#include "cap_flag.h"
+#include "cap_register.h"
 #include "wg_checkbox.h"
 #include "wg_dropdown.h"
 #include "wg_frame.h"
 #include "wg_groupbox.h"
 #include "wg_label.h"
 #include "wg_listbox.h"
-#include "wg_register.h"
 #include "wg_textbox.h"
+#include "wg_tooltip.h"
 #include "wg_navigationbar.h"
 #include <map>
 #include <string>
@@ -23,6 +25,31 @@ class DevTools;
 
 namespace wGui
 {
+    enum class Format {
+      Hex,
+      Char,
+      U8,
+      U16,
+      U32,
+      I8,
+      I16,
+      I32
+    };
+
+    enum class SearchFrom {
+      Start, // Actually searching from end when searching backward
+      PositionIncluded,
+      PositionExcluded,
+    };
+
+    enum class SearchDir {
+      Forward,
+      Backward
+    };
+
+    int FormatSize(Format f);
+    std::ostream& operator<<(std::ostream& os, const Format& f);
+    std::ostream& operator<<(std::ostream& os, const std::vector<Format>& f);
 
     class RAMConfig {
       public:
@@ -59,6 +86,14 @@ namespace wGui
 
         void CloseFrame() override;
 
+        void UpdateAll();
+
+        // Exposed for testing
+        void SetDisassembly(std::vector<SListItem> items);
+        std::vector<SListItem> GetSelectedAssembly();
+        void SetAssemblySearch(const std::string& text);
+        void AsmSearch(SearchFrom from, SearchDir dir);
+
       protected:
         void PauseExecution();
         void ResumeExecution();
@@ -68,7 +103,6 @@ namespace wGui
         void PrepareMemBankConfig();
 
         void RefreshDisassembly();
-        void UpdateAll();
         void UpdateZ80();
         void UpdateDisassembly();
         void UpdateDisassemblyPos();
@@ -78,10 +112,17 @@ namespace wGui
         void UpdateMemConfig();
         void UpdateTextMemory();
 
+        void RemoveEphemeralBreakpoints();
+
+        CButton* m_pButtonStepOut;
         CButton* m_pButtonStepIn;
         CButton* m_pButtonStepOver;
         CButton* m_pButtonPause;
         CButton* m_pButtonClose;
+
+        CToolTip* m_pToolTipStepIn;
+        CToolTip* m_pToolTipStepOut;
+        CToolTip* m_pToolTipStepOver;
 
         // New navigation bar control (to select the different pages or tabs on the options dialog)
         CNavigationBar* m_pNavigationBar; 
@@ -133,24 +174,25 @@ namespace wGui
         CRegister* m_pZ80RegF;
         CRegister* m_pZ80RegFp;
         CLabel* m_pZ80FlagsLabel;
-        CLabel* m_pZ80FlagSLbl;
-        CEditBox* m_pZ80FlagS;
-        CLabel* m_pZ80FlagZLbl;
-        CEditBox* m_pZ80FlagZ;
-        CLabel* m_pZ80FlagHLbl;
-        CEditBox* m_pZ80FlagH;
-        CLabel* m_pZ80FlagPVLbl;
-        CEditBox* m_pZ80FlagPV;
-        CLabel* m_pZ80FlagNLbl;
-        CEditBox* m_pZ80FlagN;
-        CLabel* m_pZ80FlagCLbl;
-        CEditBox* m_pZ80FlagC;
+        CFlag* m_pZ80FlagS;
+        CFlag* m_pZ80FlagZ;
+        CFlag* m_pZ80FlagX1;
+        CFlag* m_pZ80FlagH;
+        CFlag* m_pZ80FlagX2;
+        CFlag* m_pZ80FlagPV;
+        CFlag* m_pZ80FlagN;
+        CFlag* m_pZ80FlagC;
+
         // Stack
         CLabel* m_pZ80StackLabel;
         CListBox* m_pZ80Stack;
 
         // Assembly screen
         CListBox *m_pAssemblyCode;
+        CLabel *m_pAssemblySearchLbl;
+        CEditBox *m_pAssemblySearch;
+        CButton *m_pAssemblySearchPrev;
+        CButton *m_pAssemblySearchNext;
         CButton *m_pAssemblyRefresh;
         CLabel* m_pAssemblyStatusLabel;
         CEditBox* m_pAssemblyStatus;
@@ -210,6 +252,8 @@ namespace wGui
         CButton  *m_pMemButtonCopy;
         CLabel   *m_pMemBytesPerLineLbl;
         CDropDown *m_pMemBytesPerLine;
+        CLabel   *m_pMemFormatLbl;
+        CDropDown *m_pMemFormat;
         CTextBox *m_pMemTextContent;
 
         CGroupBox* m_pMemWatchPointsGrp;
@@ -251,6 +295,7 @@ namespace wGui
         int m_MemFilterValue;
         int m_MemDisplayValue;
         unsigned int m_MemBytesPerLine;
+        std::vector<Format> m_MemFormat;
 
         // Video screen
         CLabel* m_pVidLabel;

@@ -49,10 +49,20 @@ typedef union {
 #define Nflag  0x02 // negative flag
 #define Cflag  0x01 // carry flag
 #define Xflags 0x28 // bit 5 & 3 flags
+#define X1flag 0x20 // bit 5 - unused flag
+#define X2flag 0x28 // bit 3 - unused flag
+
+enum BreakpointType {
+  NORMAL = 0,
+  // Ephemeral breakpoint are removed next time the execution pauses.
+  EPHEMERAL = 1,
+};
 
 struct Breakpoint {
-  Breakpoint(word val) : address(val) {};
+  Breakpoint(word val, BreakpointType type = NORMAL) : address(val), type(type) {};
+
   dword address;
+  BreakpointType type;
 };
 
 enum WatchpointType {
@@ -67,14 +77,27 @@ struct Watchpoint {
   WatchpointType type;
 };
 
-typedef struct {
+class t_z80regs {
+  public:
+   t_z80regs() {
+     AF.d = 0;  BC.d = 0;  DE.d = 0;  HL.d = 0;  PC.d = 0; SP.d = 0;
+     AFx.d = 0; BCx.d = 0; DEx.d = 0; HLx.d = 0; IX.d = 0; IY.d = 0;
+     I = 0; R = 0; Rb7 = 0; IFF1 = 0; IFF2 = 0; IM = 0; HALT = 0;
+     EI_issued = 0; int_pending = 0;
+     watchpoint_reached = 0; breakpoint_reached = 0;
+     step_in = 0; step_out = 0;
+     break_point = 0; trace = 0;
+   };
+
    reg_pair AF, BC, DE, HL, PC, SP, AFx, BCx, DEx, HLx, IX, IY;
    byte I, R, Rb7, IFF1, IFF2, IM, HALT, EI_issued, int_pending;
    byte watchpoint_reached;
    byte breakpoint_reached;
    byte step_in;
+   byte step_out;
+   std::vector<word> step_out_addresses;
    dword break_point, trace;
-} t_z80regs;
+};
 
 
 #define EC_BREAKPOINT      10

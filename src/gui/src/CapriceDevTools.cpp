@@ -26,6 +26,75 @@ t_MemBankConfig memtool_membank_config;
 
 namespace wGui {
 
+int FormatSize(Format f)
+{
+  switch(f)
+  {
+    case Format::Hex:
+    case Format::Char:
+    case Format::U8:
+    case Format::I8:
+      return 1;
+    case Format::U16:
+    case Format::I16:
+      return 2;
+    case Format::U32:
+    case Format::I32:
+      return 4;
+  };
+  LOG_ERROR("Missing FormatSize for " << f);
+  return 1;
+}
+
+std::ostream& operator<<(std::ostream& os, const Format& f)
+{
+  switch(f)
+  {
+    case Format::Hex:
+      os << "hex";
+      break;
+    case Format::Char:
+      os << "char";
+      break;
+    case Format::U8:
+      os << "u8";
+      break;
+    case Format::U16:
+      os << "u16";
+      break;
+    case Format::U32:
+      os << "u32";
+      break;
+    case Format::I8:
+      os << "i8";
+      break;
+    case Format::I16:
+      os << "i16";
+      break;
+    case Format::I32:
+      os << "i32";
+      break;
+    default:
+      os << "!Unsupported!";
+      break;
+  }
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const std::vector<Format>& fs)
+{
+  os << "[";
+  bool first = true;
+  for (auto f : fs)
+  {
+    if (!first) os << ",";
+    first = false;
+    os << f;
+  }
+  os << "]";
+  return os;
+}
+
 std::string RAMConfig::RAMConfigText(int i)
 {
   switch (i) {
@@ -58,8 +127,8 @@ std::string RAMConfig::RAMConfigText()
 RAMConfig RAMConfig::CurrentConfig()
 {
   RAMConfig result;
-  result.LoROMEnabled = GateArray.ROM_config & 4;
-  result.HiROMEnabled = GateArray.ROM_config & 8;
+  result.LoROMEnabled = !(GateArray.ROM_config & 4);
+  result.HiROMEnabled = !(GateArray.ROM_config & 8);
   result.RAMBank = (GateArray.RAM_config & 0x38) >> 3;
   result.RAMCfg = GateArray.RAM_config & 0x7;
   return result;
@@ -103,11 +172,19 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
 
     EnableTab("z80");
 
-    m_pButtonStepIn   = new CButton(CRect(CPoint(m_ClientRect.Width() - 150, 10), 70, 15), this, "Step in");
+    m_pButtonStepIn   = new CButton(CRect(CPoint(m_ClientRect.Width() - 150, 5), 70, 15), this, "Step in");
     m_pButtonStepIn->SetIsFocusable(true);
-    m_pButtonPause   = new CButton(CRect(CPoint(m_ClientRect.Width() - 70, 10), 50, 15), this, (CPC.paused ? "Resume" : "Pause"));
+    m_pToolTipStepIn = new CToolTip(m_pButtonStepIn, "One instruction", COLOR_BLACK);
+    m_pButtonStepOver   = new CButton(CRect(CPoint(m_ClientRect.Width() - 150, 25), 70, 15), this, "Step over");
+    m_pButtonStepOver->SetIsFocusable(true);
+    m_pToolTipStepOver = new CToolTip(m_pButtonStepOver, "One instruction or call", COLOR_BLACK);
+    m_pButtonStepOut   = new CButton(CRect(CPoint(m_ClientRect.Width() - 150, 45), 70, 15), this, "Step out");
+    m_pButtonStepOut->SetIsFocusable(true);
+    m_pToolTipStepOut = new CToolTip(m_pButtonStepOut, "Exit current call/interrupt", COLOR_BLACK);
+
+    m_pButtonPause   = new CButton(CRect(CPoint(m_ClientRect.Width() - 70, 25), 50, 15), this, (CPC.paused ? "Resume" : "Pause"));
     m_pButtonPause->SetIsFocusable(true);
-    m_pButtonClose   = new CButton(CRect(CPoint(m_ClientRect.Width() - 70, 35), 50, 15), this, "Close");
+    m_pButtonClose   = new CButton(CRect(CPoint(m_ClientRect.Width() - 70, 45), 50, 15), this, "Close");
     m_pButtonClose->SetIsFocusable(true);
 
     auto monoFontEngine = Application().GetFontEngine(CPC.resources_path + "/vera_mono.ttf", 10);
@@ -148,28 +225,30 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
     m_pZ80StackLabel = new CLabel(CPoint(300, 10), m_pGroupBoxTabZ80, "Stack:");
     m_pZ80Stack = new CListBox(CRect(CPoint(300, 20), 100, 190), m_pGroupBoxTabZ80);
 
-    m_pZ80RegF = new CRegister(CRect(CPoint(300, 230), 110, 20), m_pGroupBoxTabZ80, "F");
-    m_pZ80RegFp = new CRegister(CRect(CPoint(440, 230), 110, 20), m_pGroupBoxTabZ80, "F'");
-    m_pZ80FlagsLabel = new CLabel(CPoint(300, 260), m_pGroupBoxTabZ80, "Flags:");
-    m_pZ80FlagSLbl = new CLabel(CPoint(300, 281), m_pGroupBoxTabZ80, "S");
-    m_pZ80FlagS = new CEditBox(CRect(CPoint(310, 275), 20, 20), m_pGroupBoxTabZ80);
-    m_pZ80FlagZLbl = new CLabel(CPoint(335, 281), m_pGroupBoxTabZ80, "Z");
-    m_pZ80FlagZ = new CEditBox(CRect(CPoint(345, 275), 20, 20), m_pGroupBoxTabZ80);
-    m_pZ80FlagHLbl = new CLabel(CPoint(370, 281), m_pGroupBoxTabZ80, "H");
-    m_pZ80FlagH = new CEditBox(CRect(CPoint(380, 275), 20, 20), m_pGroupBoxTabZ80);
-    m_pZ80FlagPVLbl = new CLabel(CPoint(405, 281), m_pGroupBoxTabZ80, "PV");
-    m_pZ80FlagPV = new CEditBox(CRect(CPoint(420, 275), 20, 20), m_pGroupBoxTabZ80);
-    m_pZ80FlagNLbl = new CLabel(CPoint(445, 281), m_pGroupBoxTabZ80, "N");
-    m_pZ80FlagN = new CEditBox(CRect(CPoint(455, 275), 20, 20), m_pGroupBoxTabZ80);
-    m_pZ80FlagCLbl = new CLabel(CPoint(480, 281), m_pGroupBoxTabZ80, "C");
-    m_pZ80FlagC = new CEditBox(CRect(CPoint(490, 275), 20, 20), m_pGroupBoxTabZ80);
+    m_pZ80FlagsLabel = new CLabel(CPoint(290, 222), m_pGroupBoxTabZ80, "Flags:");
+    m_pZ80RegF = new CRegister(CRect(CPoint(290, 235), 110, 20), m_pGroupBoxTabZ80, "F");
+    m_pZ80RegFp = new CRegister(CRect(CPoint(290, 255), 110, 20), m_pGroupBoxTabZ80, "F'");
+
+    m_pZ80FlagS  = new CFlag(CRect(CPoint(290, 280), 35, 20), m_pGroupBoxTabZ80, "S",  "Sign flag");
+    m_pZ80FlagZ  = new CFlag(CRect(CPoint(290, 300), 35, 20), m_pGroupBoxTabZ80, "Z",  "Zero flag");
+    m_pZ80FlagX1 = new CFlag(CRect(CPoint(290, 320), 35, 20), m_pGroupBoxTabZ80, "NU", "Unused flag");
+    m_pZ80FlagH  = new CFlag(CRect(CPoint(290, 340), 35, 20), m_pGroupBoxTabZ80, "H",  "Half carry flag");
+    m_pZ80FlagX2 = new CFlag(CRect(CPoint(340, 280), 35, 20), m_pGroupBoxTabZ80, "NU", "Unused flag");
+    m_pZ80FlagPV = new CFlag(CRect(CPoint(340, 300), 35, 20), m_pGroupBoxTabZ80, "PV", "Parity/overflow flag");
+    m_pZ80FlagN  = new CFlag(CRect(CPoint(340, 320), 35, 20), m_pGroupBoxTabZ80, "N",  "Add/substract flag");
+    m_pZ80FlagC  = new CFlag(CRect(CPoint(340, 340), 35, 20), m_pGroupBoxTabZ80, "C",  "Carry flag");
 
     // TODO: Add information about interrupts (mode, IFF1, IFF2)
 
     // ---------------- 'Assembly' screen ----------------
     m_pAssemblyCode = new CListBox(
-        CRect(10, 10, 320, m_pGroupBoxTabAsm->GetClientRect().Height() - 20),
+        CRect(10, 10, 320, m_pGroupBoxTabAsm->GetClientRect().Height() - 35),
         m_pGroupBoxTabAsm, /*bSingleSelection=*/true, /*iItemHeight=*/14, monoFontEngine);
+    m_pAssemblySearchLbl = new CLabel(CPoint(10, m_pGroupBoxTabAsm->GetClientRect().Height() - 25), m_pGroupBoxTabAsm, "Search: ");
+    m_pAssemblySearch = new CEditBox(CRect(CPoint(50, m_pGroupBoxTabAsm->GetClientRect().Height() - 30), 200, 20), m_pGroupBoxTabAsm);
+    m_pAssemblySearchPrev = new CButton(CRect(CPoint(250, m_pGroupBoxTabAsm->GetClientRect().Height() - 30), 35, 20), m_pGroupBoxTabAsm, "Prev");
+    m_pAssemblySearchNext = new CButton(CRect(CPoint(285, m_pGroupBoxTabAsm->GetClientRect().Height() - 30), 35, 20), m_pGroupBoxTabAsm, "Next");
+
     m_pAssemblyRefresh = new CButton(CRect(CPoint(340, 10), 50, 15), m_pGroupBoxTabAsm, "Refresh");
     m_pAssemblyStatusLabel = new CLabel(CPoint(400, 15), m_pGroupBoxTabAsm, "Status: ");
     // TODO: Allow editbox to have no border and 'transparent' background (i.e dynamic labels ...)
@@ -238,6 +317,7 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
     m_pMemBytesPerLineLbl = new CLabel(       CPoint(235, 18),             m_pGroupBoxTabMemory, "Bytes per line:");
     m_pMemBytesPerLine  = new CDropDown( CRect(CPoint(315, 13), 50, 20),   m_pGroupBoxTabMemory, false);
     m_pMemBytesPerLine->AddItem(SListItem("1"));
+    m_pMemBytesPerLine->AddItem(SListItem("2"));
     m_pMemBytesPerLine->AddItem(SListItem("4"));
     m_pMemBytesPerLine->AddItem(SListItem("8"));
     m_pMemBytesPerLine->AddItem(SListItem("16"));
@@ -245,8 +325,23 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
     m_pMemBytesPerLine->AddItem(SListItem("64"));
     m_pMemBytesPerLine->SetListboxHeight(4);
     m_MemBytesPerLine = 16;
-    m_pMemBytesPerLine->SelectItem(3);
+    m_pMemBytesPerLine->SelectItem(4);
     m_pMemBytesPerLine->SetIsFocusable(true);
+
+    m_pMemFormatLbl      = new CLabel(       CPoint(235, 38),             m_pGroupBoxTabMemory, "Format:");
+    m_pMemFormat        = new CDropDown( CRect(CPoint(280, 33), 85, 20),   m_pGroupBoxTabMemory, true);
+    m_pMemFormat->AddItem(SListItem("Hex"));
+    m_pMemFormat->AddItem(SListItem("Hex & char"));
+    m_pMemFormat->AddItem(SListItem("Hex & u8"));
+    m_pMemFormat->AddItem(SListItem("Hex & u16"));
+    m_pMemFormat->AddItem(SListItem("Hex & u32"));
+    m_pMemFormat->AddItem(SListItem("Hex & i8"));
+    m_pMemFormat->AddItem(SListItem("Hex & i16"));
+    m_pMemFormat->AddItem(SListItem("Hex & i32"));
+    m_pMemFormat->SetListboxHeight(4);
+    m_MemFormat = {Format::Hex};
+    m_pMemFormat->SelectItem(0);
+    m_pMemFormat->SetIsFocusable(true);
 
     m_pMemFilterLabel     = new CLabel(        CPoint(15, 80),             m_pGroupBoxTabMemory, "Byte: ");
     m_pMemFilterValue     = new CEditBox(CRect(CPoint(55, 75), 30, 20),    m_pGroupBoxTabMemory);
@@ -303,6 +398,7 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
     m_pMemConfigMemRAMBank = new CDropDown(CRect(CPoint(110, 25), 40, 20), m_pMemConfigGrp);
     int nb_banks = (CPC.ram_size == 64) ? 1 : ((CPC.ram_size / 64)-1);
     for (int i = 0; i < nb_banks; i++) m_pMemConfigMemRAMBank->AddItem(SListItem(std::to_string(i)));
+    // TODO: Default to RAMBank & RAMConfig that are currently used
     m_pMemConfigMemRAMBank->SelectItem(0);
     m_pMemConfigMemRAMConfig = new CDropDown(CRect(CPoint(160, 25), 70, 20), m_pMemConfigGrp);
     int nb_configs = (CPC.ram_size == 64) ? 1 : 8;
@@ -319,7 +415,7 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
     m_pMemConfigCurRAMConfig->SetReadOnly(true);
 
     // ---------------- 'Video' screen ----------------
-    m_pVidLabel = new CLabel(CPoint(10, 10), m_pGroupBoxTabVideo, "Work in progress ... Nothing to see here yet, but come back later for video (CRTC & PSG info).");
+    m_pVidLabel = new CLabel(CPoint(10, 10), m_pGroupBoxTabVideo, "Work in progress ... Nothing to see here yet, but come back later for video (CRTC & GateArray info).");
     // ---------------- 'Audio' screen ----------------
     m_pAudLabel = new CLabel(CPoint(10, 10), m_pGroupBoxTabAudio, "Work in progress ... Nothing to see here yet, but come back later for sound (tone and volume envelopes, etc ...).");
     // TODO: PSG registers, envelopes, noise, channel curve? ...
@@ -327,7 +423,9 @@ CapriceDevTools::CapriceDevTools(const CRect& WindowRect, CWindow* pParent, CFon
     m_pChrLabel = new CLabel(CPoint(10, 10), m_pGroupBoxTabChar, "Work in progress ... Nothing to see here yet, but come back later for charmap.");
     // TODO: A 'Graphics' screen displaying memory as graphics (sprites) with choice of mode (0, 1 or 2), width and start address.
 
-    UpdateAll();
+    // Moved to an explicit call by the caller to allow constructing
+    // CapriceDevTools with less constraints in tests.
+    //UpdateAll();
 }
 
 CapriceDevTools::~CapriceDevTools() = default;
@@ -376,9 +474,77 @@ std::string FormatSymbol(const std::map<word, std::string>::iterator& symbol_it)
   return oss.str();
 }
 
-void CapriceDevTools::RefreshDisassembly()
+void CapriceDevTools::AsmSearch(SearchFrom from, SearchDir dir)
+{
+  const auto& lines = m_pAssemblyCode->GetAllItems();
+  std::vector<SListItem>::const_iterator start_line, end_line;
+  auto pos = m_pAssemblyCode->getFirstSelectedIndex();
+  if (pos == -1) {
+    from = SearchFrom::Start;
+  }
+  int delta = dir == SearchDir::Forward ? 1 : -1;
+  switch (from)
+  {
+    case SearchFrom::PositionIncluded:
+      break;
+    case SearchFrom::PositionExcluded:
+      pos += delta;
+      break;
+    case SearchFrom::Start:
+      if (dir == SearchDir::Forward) {
+        pos = 0;
+      } else {
+        pos = lines.size() - 1;
+      }
+      break;
+  }
+
+  start_line = lines.begin() + pos;
+  if (dir == SearchDir::Forward) {
+    end_line = lines.end();
+  } else {
+    end_line = lines.begin()-1;
+  }
+
+  std::string to_find = m_pAssemblySearch->GetWindowText();
+  for (auto l = start_line; l != end_line; l += delta)
+  {
+    if (l->sItemText.find(to_find) != std::string::npos) {
+      m_pAssemblyCode->SetAllSelections(false);
+      m_pAssemblyCode->SetPosition(pos, CListBox::CENTER);
+      m_pAssemblyCode->SetSelection(pos, /*bSelected=*/true, /*bNotify=*/true);
+      break;
+    }
+    pos += delta;
+  }
+}
+
+void CapriceDevTools::SetDisassembly(std::vector<SListItem> items)
 {
   m_pAssemblyCode->ClearItems();
+  m_pAssemblyCode->AddItems(items);
+}
+
+std::vector<SListItem> CapriceDevTools::GetSelectedAssembly()
+{
+  // TODO: This code should really be in CListBox!!
+  std::vector<SListItem> result;
+  for(unsigned int i = 0; i < m_pAssemblyCode->Size(); i++)
+  {
+    if (m_pAssemblyCode->IsSelected(i)) {
+      result.push_back(m_pAssemblyCode->GetItem(i));
+    }
+  }
+  return result;
+}
+
+void CapriceDevTools::SetAssemblySearch(const std::string& text)
+{
+  m_pAssemblySearch->SetWindowText(text);
+}
+
+void CapriceDevTools::RefreshDisassembly()
+{
   std::vector<SListItem> items;
   std::map<word, std::string> symbols = m_Symfile.Symbols();
   std::map<word, std::string>::iterator symbols_it = symbols.begin();
@@ -423,7 +589,7 @@ void CapriceDevTools::RefreshDisassembly()
     items.emplace_back(instruction, reinterpret_cast<void*>(line.address_), color);
   }
 
-  m_pAssemblyCode->AddItems(items);
+  SetDisassembly(items);
   UpdateDisassemblyPos();
 }
 
@@ -478,12 +644,14 @@ void CapriceDevTools::UpdateZ80()
   m_pZ80RegSP->SetValue(z80.SP.w.l);
   m_pZ80RegPC->SetValue(z80.PC.w.l);
 
-  m_pZ80FlagS->SetWindowText((z80.AF.b.l & Sflag) ? "1" : "0");
-  m_pZ80FlagZ->SetWindowText((z80.AF.b.l & Zflag) ? "1" : "0");
-  m_pZ80FlagH->SetWindowText((z80.AF.b.l & Hflag) ? "1" : "0");
-  m_pZ80FlagPV->SetWindowText((z80.AF.b.l & Pflag) ? "1" : "0");
-  m_pZ80FlagN->SetWindowText((z80.AF.b.l & Nflag) ? "1" : "0");
-  m_pZ80FlagC->SetWindowText((z80.AF.b.l & Cflag) ? "1" : "0");
+  m_pZ80FlagS->SetValue((z80.AF.b.l & Sflag) ? "1" : "0");
+  m_pZ80FlagZ->SetValue((z80.AF.b.l & Zflag) ? "1" : "0");
+  m_pZ80FlagX1->SetValue((z80.AF.b.l & X1flag) ? "1" : "0");
+  m_pZ80FlagH->SetValue((z80.AF.b.l & Hflag) ? "1" : "0");
+  m_pZ80FlagX2->SetValue((z80.AF.b.l & X2flag) ? "1" : "0");
+  m_pZ80FlagPV->SetValue((z80.AF.b.l & Pflag) ? "1" : "0");
+  m_pZ80FlagN->SetValue((z80.AF.b.l & Nflag) ? "1" : "0");
+  m_pZ80FlagC->SetValue((z80.AF.b.l & Cflag) ? "1" : "0");
 
   m_pZ80Stack->ClearItems();
   // Don't show more than 50 values in the stack if not paused as this slows
@@ -582,17 +750,88 @@ void CapriceDevTools::UpdateTextMemory()
     bool displayLine = false;
     bool filterAdress = (m_MemDisplayValue >= 0 && m_MemDisplayValue <= 65535);
     bool filterValue = (m_MemFilterValue >= 0 && m_MemFilterValue <= 255);
-    for(unsigned int j = 0; j < m_MemBytesPerLine; j++) {
-      unsigned int val = ReadMem(i*m_MemBytesPerLine+j);
-      memLine << std::setw(2) << val << " ";
+    bool first = true;
+    for(auto f : m_MemFormat) {
+      if (!first) {
+        memLine << " | ";
+      }
+      first = false;
+      for(unsigned int j = 0; j < m_MemBytesPerLine; j+=FormatSize(f)) {
+        switch (f) {
+          case Format::Hex:
+            {
+              unsigned int val = ReadMem(i*m_MemBytesPerLine+j);
+              memLine << std::setfill('0') << std::setw(2) << std::hex << val << " ";
+              break;
+            }
+          case Format::Char:
+            {
+              char val = ReadMem(i*m_MemBytesPerLine+j);
+              if (val >= 32) {
+                memLine << val;
+              } else {
+                memLine << ".";
+              }
+              break;
+            }
+          case Format::U8:
+            {
+              unsigned int val = ReadMem(i*m_MemBytesPerLine+j);
+              memLine << std::setfill(' ') << std::setw(3) << std::dec << val << " ";
+              break;
+            }
+          case Format::U16:
+            {
+              unsigned int val = static_cast<uint32_t>(ReadMem(i*m_MemBytesPerLine+j)) +
+                (static_cast<uint32_t>(ReadMem(i*m_MemBytesPerLine+j+1) << 8));
+              memLine << std::setfill(' ') << std::setw(5) << std::dec << val << " ";
+              break;
+            }
+          case Format::U32:
+            {
+              unsigned int val = static_cast<uint32_t>(ReadMem(i*m_MemBytesPerLine+j)) +
+                (static_cast<uint32_t>(ReadMem(i*m_MemBytesPerLine+j+1) << 8)) +
+                (static_cast<uint32_t>(ReadMem(i*m_MemBytesPerLine+j+2) << 16)) +
+                (static_cast<uint32_t>(ReadMem(i*m_MemBytesPerLine+j+3) << 24));
+              memLine << std::setfill(' ') << std::setw(10) << std::dec << val << " ";
+              break;
+            }
+          case Format::I8:
+            {
+              int8_t val = static_cast<int8_t>(ReadMem(i*m_MemBytesPerLine+j));
+              memLine << std::setfill(' ') << std::setw(4) << std::dec << val << " ";
+              break;
+            }
+          case Format::I16:
+            {
+              int16_t val = static_cast<uint16_t>(ReadMem(i*m_MemBytesPerLine+j)) +
+                (static_cast<uint16_t>(ReadMem(i*m_MemBytesPerLine+j+1) << 8));
+              memLine << std::setfill(' ') << std::setw(6) << std::dec << val << " ";
+              break;
+            }
+          case Format::I32:
+            {
+              int32_t val = static_cast<int32_t>(ReadMem(i*m_MemBytesPerLine+j)) +
+                (static_cast<int32_t>(ReadMem(i*m_MemBytesPerLine+j+1) << 8)) +
+                (static_cast<int32_t>(ReadMem(i*m_MemBytesPerLine+j+2) << 16)) +
+                (static_cast<int32_t>(ReadMem(i*m_MemBytesPerLine+j+3) << 24));
+              memLine << std::setfill(' ') << std::setw(11) << std::dec << val << " ";
+              break;
+            }
+        }
+      }
       if(!filterAdress && !filterValue) {
         displayLine = true;
-      }
-      if(filterValue && static_cast<int>(val) == m_MemFilterValue) {
-        displayLine = true;
-      }
-      if(filterAdress && (i*m_MemBytesPerLine+j == static_cast<unsigned int>(m_MemDisplayValue))) {
-        displayLine = true;
+      } else {
+        for(unsigned int j = 0; j < m_MemBytesPerLine; j++) {
+          unsigned int val = ReadMem(i*m_MemBytesPerLine+j);
+          if(filterValue && static_cast<int>(val) == m_MemFilterValue) {
+            displayLine = true;
+          }
+          if(filterAdress && (i*m_MemBytesPerLine+j == static_cast<unsigned int>(m_MemDisplayValue))) {
+            displayLine = true;
+          }
+        }
       }
     }
     if(displayLine) {
@@ -634,15 +873,24 @@ void CapriceDevTools::LoadSymbols(const std::string& filename)
   RefreshDisassembly();
 }
 
+void CapriceDevTools::RemoveEphemeralBreakpoints()
+{
+  breakpoints.erase(
+      std::remove_if(breakpoints.begin(), breakpoints.end(),
+                     [](const auto& x){ return x.type & EPHEMERAL; }),
+      breakpoints.end());
+}
+
 void CapriceDevTools::PreUpdate()
 {
-  bool wasRunning = !CPC.paused;
+  static bool wasRunning;
   // Pause on breakpoints and watchpoints.
   // Before updating display so that we can update differently: faster if not
   // paused, more details if paused.
   if (!breakpoints.empty() || !watchpoints.empty()) {
     if (z80.watchpoint_reached || z80.breakpoint_reached) {
       PauseExecution();
+      RemoveEphemeralBreakpoints();
     };
   }
   if (CPC.paused) {
@@ -650,7 +898,11 @@ void CapriceDevTools::PreUpdate()
   } else {
     m_pButtonPause->SetWindowText("Pause");
   }
+  // Do not update if we're paused.
+  // This is particularly needed for disassembly pos as otherwise it's not
+  // possible to scroll in the disassembled code.
   if (wasRunning) {
+    wasRunning = !CPC.paused;
     switch (m_pNavigationBar->getSelectedIndex()) {
       case 0 : { // 'z80'
                  UpdateZ80();
@@ -674,6 +926,8 @@ void CapriceDevTools::PreUpdate()
                  break;
                }
     }
+  } else {
+    wasRunning = !CPC.paused;
   }
 }
 
@@ -725,11 +979,36 @@ bool CapriceDevTools::HandleMessage(CMessage* pMessage)
               ResumeExecution();
               break;
             }
+            if (pMessage->Source() == m_pButtonStepOver) {
+              // Like StepIn except if the instruction is a call
+              std::vector<dword> unused_entrypoints;
+              DisassembledCode unused_code;
+              auto current_line = disassemble_one(z80.PC.d, unused_code, unused_entrypoints);
+              if (current_line.instruction_.rfind("call", 0) == 0) {
+                breakpoints.emplace_back(z80.PC.d + current_line.Size(), EPHEMERAL);
+              } else {
+                z80.step_in = 1;
+              }
+              ResumeExecution();
+              break;
+            }
+            if (pMessage->Source() == m_pButtonStepOut) {
+              z80.step_out = 1;
+              z80.step_out_addresses.clear();
+              ResumeExecution();
+              break;
+            }
           }
           if (pMessage->Destination() == m_pGroupBoxTabAsm) {
             if (pMessage->Source() == m_pAssemblyRefresh) {
               UpdateDisassembly();
               break;
+            }
+            if (pMessage->Source() == m_pAssemblySearchPrev) {
+              AsmSearch(SearchFrom::PositionExcluded, SearchDir::Backward);
+            }
+            if (pMessage->Source() == m_pAssemblySearchNext) {
+              AsmSearch(SearchFrom::PositionExcluded, SearchDir::Forward);
             }
           }
           if (pMessage->Destination() == m_pAssemblyEntryPointsGrp) {
@@ -901,40 +1180,59 @@ bool CapriceDevTools::HandleMessage(CMessage* pMessage)
             }
           }
         }
-        if (pMessage->Destination() == m_pMemBytesPerLine) {
-          switch (m_pMemBytesPerLine->GetSelectedIndex()) {
-            case 0:
-              m_MemBytesPerLine = 1;
-              break;
-            case 1:
-              m_MemBytesPerLine = 4;
-              break;
-            case 2:
-              m_MemBytesPerLine = 8;
-              break;
-            case 3:
-              m_MemBytesPerLine = 16;
-              break;
-            case 4:
-              m_MemBytesPerLine = 32;
-              break;
-            case 5:
-              m_MemBytesPerLine = 64;
-              break;
+        if (pMessage->Destination() == m_pGroupBoxTabAsm) {
+          if (pMessage->Source() == m_pAssemblySearch) {
+            AsmSearch(SearchFrom::PositionIncluded, SearchDir::Forward);
           }
-          // Note: Any saved filter doesn't make sense anymore but we keep it
-          // just in case the user wants to come back to the previous
-          // BytesPerLine.
-          // It would be nice to have a mechanism to warn the user if the
-          // filter is not aligned with the BytesPerLine setting.
-          UpdateTextMemory();
+        }
+        if (pMessage->Destination() == m_pGroupBoxTabMemory) {
+          if (pMessage->Source() == m_pMemBytesPerLine) {
+            m_MemBytesPerLine = 1 << m_pMemBytesPerLine->GetSelectedIndex();
+            // Note: Any saved filter doesn't make sense anymore but we keep it
+            // just in case the user wants to come back to the previous
+            // BytesPerLine.
+            // It would be nice to have a mechanism to warn the user if the
+            // filter is not aligned with the BytesPerLine setting.
+            UpdateTextMemory();
+          }
+          if (pMessage->Source() == m_pMemFormat) {
+            m_MemFormat.clear();
+            for (auto f : stringutils::split(m_pMemFormat->GetWindowText(), '&')) {
+              f = stringutils::lower(stringutils::trim(f, ' '));
+              if (f == "hex") {
+                m_MemFormat.push_back(Format::Hex);
+              } else if (f == "char") {
+                m_MemFormat.push_back(Format::Char);
+              } else if (f == "u8") {
+                m_MemFormat.push_back(Format::U8);
+              } else if (f == "u16") {
+                m_MemFormat.push_back(Format::U16);
+              } else if (f == "u32") {
+                m_MemFormat.push_back(Format::U32);
+              } else if (f == "i8") {
+                m_MemFormat.push_back(Format::I8);
+              } else if (f == "i16") {
+                m_MemFormat.push_back(Format::I16);
+              } else if (f == "i32") {
+                m_MemFormat.push_back(Format::I32);
+              } else {
+                LOG_WARNING("Unknown format token '" << f << "', skipping.");
+                continue;
+              }
+            }
+            if (m_MemFormat.empty()) {
+              LOG_ERROR("No valid format provided in '" << m_pMemFormat->GetWindowText() << "', defaulting to 'Hex'.");
+              m_MemFormat.push_back(Format::Hex);
+            }
+            UpdateTextMemory();
+          }
         }
 #if __GNUC__ >= 7
         [[gnu::fallthrough]];
 #endif
       case CMessage::CTRL_VALUECHANGING:
         if (pMessage->Destination() == m_pGroupBoxTabZ80) {
-          // Handle scrollbars
+          // TODO: Handle scrollbars
         }
         break;
 

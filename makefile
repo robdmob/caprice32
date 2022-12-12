@@ -111,7 +111,7 @@ TEST_HEADERS:=$(shell find $(TSTDIR) -name \*.h)
 TEST_DEPENDS:=$(foreach file,$(TEST_SOURCES:.cpp=.d),$(shell echo "$(OBJDIR)/$(file)"))
 TEST_OBJECTS:=$(TEST_DEPENDS:.d=.o)
 
-.PHONY: all check_deps clean deb_pkg debug debug_flag distrib doc unit_test install doxygen
+.PHONY: all check_deps clean deb_pkg debug debug_flag distrib doc tags unit_test install doxygen
 
 WARNINGS = -Wall -Wextra -Wzero-as-null-pointer-constant -Wformat=2 -Wold-style-cast -Wmissing-include-dirs -Woverloaded-virtual -Wpointer-arith -Wredundant-decls
 COMMON_CFLAGS += $(CFLAGS) -std=c++17 $(IPATHS)
@@ -181,7 +181,7 @@ check_deps:
 endif
 
 tags:
-	@ctags -R . || echo -e "!!!!!!!!!!!\n!! Warning: ctags not found - if you are a developer, you might want to install it.\n!!!!!!!!!!!"
+	@ctags -R main.cpp src || echo -e "!!!!!!!!!!!\n!! Warning: ctags not found - if you are a developer, you might want to install it.\n!!!!!!!!!!!"
 
 doc: $(HTML_DOC)
 
@@ -250,8 +250,10 @@ endif  # ARCH =? macos
 install: $(TARGET)
 	install -D $(TARGET) $(DESTDIR)$(prefix)/bin/$(TARGET)
 	install -D $(GROFF_DOC) $(DESTDIR)$(prefix)/share/man/man6/cap32.6
-	install -D -m664 cap32.cfg.tmpl $(DESTDIR)/etc/cap32.cfg
-	sed -i "s,__SHARE_PATH__,$(DESTDIR)$(prefix)/share/caprice32," $(DESTDIR)/etc/cap32.cfg
+	if [ ! -f $(DESTDIR)/etc/cap32.cfg ]; then \
+		install -D -m664 cap32.cfg.tmpl $(DESTDIR)/etc/cap32.cfg; \
+		sed -i "s,__SHARE_PATH__,$(DESTDIR)$(prefix)/share/caprice32," $(DESTDIR)/etc/cap32.cfg; \
+	fi
 	mkdir -p $(DESTDIR)$(prefix)/share/caprice32
 	cp -r resources rom $(DESTDIR)$(prefix)/share/caprice32
 
